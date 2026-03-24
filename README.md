@@ -229,18 +229,18 @@ These are human tasks that should be completed before asking an AI to write infr
 
 ### Cloudflare and domain setup
 
-- [ ] Create a Cloudflare account
-- [ ] Buy or assign a dedicated QA mail domain or subdomain
-- [ ] Move DNS authority for that domain to Cloudflare
-- [ ] Enable Email Routing for that domain
-- [ ] Configure the catch-all inbound route
-- [ ] Create API tokens for deployment and CLI usage
+- [x] Create a Cloudflare account
+- [x] Buy or assign a dedicated QA mail domain or subdomain : mailinpot.com
+- [x] Move DNS authority for that domain to Cloudflare
+- [x] Enable Email Routing for that domain
+- [x] Configure the catch-all inbound route
+- [x] Create API tokens for deployment and CLI usage
 
 ### Local development setup
 
-- [ ] Install Node and Wrangler for Worker deployment
-- [ ] Install Python toolchain for the client library and CLI
-- [ ] Create a new GitHub repo for this project
+- [x] Install Node and Wrangler for Worker deployment
+- [x] Install Python toolchain for the client library and CLI
+- [x] Create a new GitHub repo for this project
 
 ---
 
@@ -248,9 +248,9 @@ These are human tasks that should be completed before asking an AI to write infr
 
 ### Phase 1 — repo bootstrap
 
-- [ ] Create repo structure
-- [ ] Add this README
-- [ ] Add license
+- [x] Create repo structure
+- [x] Add this README
+- [x] Add license
 - [ ] Add `.gitignore`
 - [ ] Decide package/module names and directory layout
 
