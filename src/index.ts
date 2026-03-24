@@ -1,7 +1,26 @@
 /**
  * Cloudflare Worker entrypoint for mailinpot.
  *
- * Handles two types of events:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS FILE IS TYPESCRIPT (AND MUST STAY THAT WAY)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Cloudflare Python Workers are in open beta (2024) but have two hard gaps
+ * that this project cannot work around:
+ *
+ *   1. The `email` event handler only exists in JS/TS Workers.
+ *      Python Workers cannot receive inbound email from Cloudflare Email
+ *      Routing – the runtime simply does not expose that event.
+ *
+ *   2. Durable Object *classes* cannot be written in Python.
+ *      MailboxDO must be a JS/TS class that Cloudflare instantiates per
+ *      recipient address and keeps alive across requests.
+ *
+ * Everything that *can* be Python already is:
+ *   • `mailflow/`  – the Python client library test code imports
+ *   • `cli/`       – the allowlist management CLI
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * This Worker handles two types of events:
  *
  * 1. Email events  – Cloudflare Email Routing delivers inbound emails here.
  *    Flow: derive sender → check allowlist → route to MailboxDO.
@@ -10,7 +29,7 @@
  *
  * REST API
  * ========
- * All endpoints require `Authorization: Bearer <API_SECRET>` unless noted.
+ * All endpoints require `Authorization: Bearer <API_SECRET>`.
  *
  * Consumer:
  *   GET /api/wait/<recipient>?timeout=<ms>

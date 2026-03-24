@@ -1,22 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# mailinpot – wrangler.toml
+#
+# Cloudflare Workers deployment configuration.
+# Run `npx wrangler deploy` to push the Worker to Cloudflare.
+# Run `npx wrangler dev`    to run a local dev server.
+#
+# Before deploying for the first time:
+#   1. Create the KV namespace:
+#        npx wrangler kv:namespace create ALLOWLIST_KV
+#        npx wrangler kv:namespace create ALLOWLIST_KV --preview
+#      Replace the placeholder IDs below with the values printed by those commands.
+#   2. Set the API secret (never commit the real value):
+#        npx wrangler secret put API_SECRET
+# ─────────────────────────────────────────────────────────────────────────────
+
 name = "mailinpot"
+# Entry point – must be TypeScript/JS.  Python Workers do not support the
+# `email` event handler or Durable Object class definitions.
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
+# nodejs_compat enables Node.js-style module resolution and a subset of the
+# Node built-in APIs (crypto, buffer, etc.) inside the Worker.
 compatibility_flags = ["nodejs_compat"]
 
+# ── Plain-text environment variables ─────────────────────────────────────────
+# These are visible in the Cloudflare dashboard.  Use `wrangler secret put`
+# for anything sensitive (the value here is only the dev default).
 [vars]
-# Override with a secret in production:
-#   wrangler secret put API_SECRET
 API_SECRET = "change-me-in-production"
 
+# ── Workers KV – sender allowlist ─────────────────────────────────────────────
+# ALLOWLIST_KV stores who is allowed to send mail to the system.
+# Key format:
+#   sender:exact:<addr>   – accept exactly this sender address
+#   sender:domain:<dom>   – accept any sender at this domain
+# Managed via the Python CLI (`mailinpot-allowlist`) or the REST API.
 [[kv_namespaces]]
 binding = "ALLOWLIST_KV"
 id = "REPLACE_WITH_KV_ID"
 preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
 
+# ── Durable Objects – per-recipient mailboxes ─────────────────────────────────
+# One MailboxDO instance is created per unique recipient address.
+# It holds accepted email briefly and delivers it to waiting Python consumers
+# via long-poll, so no database polling is needed.
 [[durable_objects.bindings]]
 name = "MAILBOX"
 class_name = "MailboxDO"
 
+# Migration tag must be bumped whenever a new Durable Object class is added
+# or an existing one is renamed/deleted.
 [[migrations]]
 tag = "v1"
 new_classes = ["MailboxDO"]
