@@ -14,6 +14,10 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
+# Credentials and secrets – never commit these
+*.creds
+.env
+
 # Misc
 *.log
 .DS_Store
