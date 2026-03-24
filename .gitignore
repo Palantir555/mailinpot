@@ -1,0 +1,19 @@
+# Node / Wrangler
+node_modules/
+.wrangler/
+dist/
+.dev.vars
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Misc
+*.log
+.DS_Store
