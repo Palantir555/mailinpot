@@ -244,6 +244,139 @@ These are human tasks that should be completed before asking an AI to write infr
 
 ---
 
+---
+
+## Deployment
+
+> **Prerequisites:** complete all steps in [Manual setup required before
+> coding](#manual-setup-required-before-coding) first.
+
+### 1. Deploy the Cloudflare Worker
+
+```bash
+cd /path/to/mailinpot
+
+# 1a. Create the KV namespace for the allowlist (one-time setup)
+npx wrangler kv:namespace create ALLOWLIST_KV
+npx wrangler kv:namespace create ALLOWLIST_KV --preview
+
+# 1b. Edit wrangler.toml and paste in the two IDs printed above:
+#     Replace  id         = "REPLACE_WITH_KV_ID"
+#     Replace  preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+
+# 1c. Set the API bearer secret (stored encrypted in Cloudflare, never committed)
+npx wrangler secret put API_SECRET
+
+# 1d. Deploy
+npx wrangler deploy
+```
+
+The command prints the Worker URL, e.g.
+`https://mailinpot.<account>.workers.dev`.  Note it — you need it as
+`MAILINPOT_URL` below.
+
+### 2. Configure Cloudflare Email Routing
+
+In the Cloudflare dashboard:
+
+1. Go to **Email → Email Routing** for your QA domain (`mailinpot.com`).
+2. Under the catch-all rule, choose **Send to a Worker**.
+3. Select the `mailinpot` Worker you just deployed.
+4. Save.
+
+All inbound mail for `*@mailinpot.com` now flows into the Worker.
+
+### 3. Install the Python package and CLI
+
+```bash
+# From the repo root (editable install so you get the latest code)
+pip install -e mailflow/
+
+# or with uv:
+uv pip install -e mailflow/
+```
+
+### 4. Set environment variables
+
+```bash
+export MAILINPOT_URL=https://mailinpot.<account>.workers.dev
+export MAILINPOT_SECRET=<the secret you chose in step 1c>
+```
+
+Add these to your shell profile or `.env` file for convenience.
+
+### 5. Populate the sender allowlist
+
+Emails are silently dropped unless the original sender is on the allowlist.
+Add entries before running tests:
+
+```bash
+# Allow all mail from a domain
+mailinpot-allowlist add domain myservice.com
+
+# Or allow a single sender address only
+mailinpot-allowlist add exact noreply@myservice.com
+
+# Inspect the current list
+mailinpot-allowlist list
+
+# Remove an entry
+mailinpot-allowlist remove domain myservice.com
+```
+
+---
+
+## Quick start
+
+### Wait for a specific address
+
+```bash
+python -m mailflow run-test123@mailinpot.com
+```
+
+Blocks until an email arrives (60 s default timeout), then prints all
+metadata and the raw message body to stdout.
+
+### Auto-generate a fresh address
+
+```bash
+python -m mailflow
+```
+
+A unique address (e.g. `run-4a7f1c9b2e30@mailinpot.com`) is printed to
+stdout first so you can copy it to the app under test.  Use `--prefix` to
+give it a meaningful label:
+
+```bash
+python -m mailflow --prefix password-reset --timeout 120
+```
+
+### Use `mailflow` from Python test code
+
+```python
+from mailflow.addressing import generate_recipient
+from mailflow.client import MailflowClient
+from mailflow.wait import wait_for_email
+
+client = MailflowClient(
+    base_url="https://mailinpot.<account>.workers.dev",
+    api_secret="<secret>",
+)
+
+# Pick a unique address for this test run
+recipient = generate_recipient(prefix="password-reset")
+
+# … trigger the email in your app under test …
+
+# Wait for it (raises EmailTimeoutError if nothing arrives within 60 s)
+email = wait_for_email(client, recipient, timeout=60)
+
+# Hand off to your app-specific parsing code
+assert "Reset your password" in email.subject
+otp = my_app.extract_otp(email.body_text)
+```
+
+
 ## Implementation plan
 
 ### Phase 1 — repo bootstrap
@@ -251,59 +384,59 @@ These are human tasks that should be completed before asking an AI to write infr
 - [x] Create repo structure
 - [x] Add this README
 - [x] Add license
-- [ ] Add `.gitignore`
-- [ ] Decide package/module names and directory layout
+- [x] Add `.gitignore`
+- [x] Decide package/module names and directory layout
 
 ### Phase 2 — addressing and message model
 
-- [ ] Define recipient address format for unique runs
-- [ ] Define normalized accepted-email model
-- [ ] Define minimal stored fields
-- [ ] Define retention policy
+- [x] Define recipient address format for unique runs
+- [x] Define normalized accepted-email model
+- [x] Define minimal stored fields
+- [x] Define retention policy
 
 ### Phase 3 — allowlist subsystem
 
-- [ ] Implement KV-backed allowlist lookups
-- [ ] Implement exact-address matching
-- [ ] Implement domain matching
-- [ ] Implement allowlist CLI for add/remove/list operations
+- [x] Implement KV-backed allowlist lookups
+- [x] Implement exact-address matching
+- [x] Implement domain matching
+- [x] Implement allowlist CLI for add/remove/list operations
 
 ### Phase 4 — Worker ingestion path
 
-- [ ] Implement Email Worker entrypoint
-- [ ] Parse sender-related headers
-- [ ] Derive original sender using the chosen rule
-- [ ] Check allowlist
-- [ ] Drop rejected mail
-- [ ] Route accepted mail to the Durable Object for the recipient
+- [x] Implement Email Worker entrypoint
+- [x] Parse sender-related headers
+- [x] Derive original sender using the chosen rule
+- [x] Check allowlist
+- [x] Drop rejected mail
+- [x] Route accepted mail to the Durable Object for the recipient
 
 ### Phase 5 — live coordination layer
 
-- [ ] Implement Durable Object keyed by recipient address
-- [ ] Implement “wait for next email” behavior
-- [ ] Implement consume/delete behavior
-- [ ] Implement expiry and cleanup
+- [x] Implement Durable Object keyed by recipient address
+- [x] Implement “wait for next email” behavior
+- [x] Implement consume/delete behavior
+- [x] Implement expiry and cleanup
 
 ### Phase 6 — fallback/debug storage
 
-- [ ] Add short-lived fallback storage
-- [ ] Store only minimal fields
-- [ ] Add short retention cleanup
-- [ ] Keep this off the hot path
+- [x] Add short-lived fallback storage
+- [x] Store only minimal fields
+- [x] Add short retention cleanup
+- [x] Keep this off the hot path
 
 ### Phase 7 — Python client library
 
-- [ ] Implement `mailflow` package
-- [ ] Implement recipient address generation helper
-- [ ] Implement blocking wait API
-- [ ] Implement normalized email model
-- [ ] Add basic convenience accessors for subject/text/body
+- [x] Implement `mailflow` package
+- [x] Implement recipient address generation helper
+- [x] Implement blocking wait API
+- [x] Implement normalized email model
+- [x] Add basic convenience accessors for subject/text/body
 
 ### Phase 8 — testing
 
-- [ ] Unit test sender derivation
-- [ ] Unit test allowlist matching
-- [ ] Unit test recipient-based routing
+- [x] Unit test sender derivation
+- [x] Unit test allowlist matching
+- [x] Unit test recipient-based routing
 - [ ] Integration test with real inbound email
 - [ ] Integration test with forwarded email
 - [ ] Integration test with parallel runs
