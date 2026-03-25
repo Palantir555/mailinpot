@@ -6,8 +6,10 @@ Usage examples::
     mailinpot-allowlist list
     mailinpot-allowlist add exact comms@myservice.com
     mailinpot-allowlist add domain myservice.com
+    mailinpot-allowlist add wildcard
     mailinpot-allowlist remove exact comms@myservice.com
     mailinpot-allowlist remove domain myservice.com
+    mailinpot-allowlist remove wildcard
 
 Environment variables
 ---------------------
@@ -50,22 +52,36 @@ def cmd_list(args: argparse.Namespace) -> None:  # noqa: ARG001
 
 def cmd_add(args: argparse.Namespace) -> None:
     client = _client()
-    if args.kind == "exact":
-        client.add_exact(args.value)
-        print(f"Added exact: {args.value}")
+    if args.kind == "wildcard":
+        client.add_wildcard()
+        print("Added wildcard: *")
     else:
-        client.add_domain(args.value)
-        print(f"Added domain: {args.value}")
+        if not args.value:
+            print(f"Error: value is required for '{args.kind}' entries.", file=sys.stderr)
+            sys.exit(1)
+        if args.kind == "exact":
+            client.add_exact(args.value)
+            print(f"Added exact: {args.value}")
+        else:
+            client.add_domain(args.value)
+            print(f"Added domain: {args.value}")
 
 
 def cmd_remove(args: argparse.Namespace) -> None:
     client = _client()
-    if args.kind == "exact":
-        client.remove_exact(args.value)
-        print(f"Removed exact: {args.value}")
+    if args.kind == "wildcard":
+        client.remove_wildcard()
+        print("Removed wildcard: *")
     else:
-        client.remove_domain(args.value)
-        print(f"Removed domain: {args.value}")
+        if not args.value:
+            print(f"Error: value is required for '{args.kind}' entries.", file=sys.stderr)
+            sys.exit(1)
+        if args.kind == "exact":
+            client.remove_exact(args.value)
+            print(f"Removed exact: {args.value}")
+        else:
+            client.remove_domain(args.value)
+            print(f"Removed domain: {args.value}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -78,12 +94,22 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="List all allowlist entries.")
 
     add_p = sub.add_parser("add", help="Add an entry to the allowlist.")
-    add_p.add_argument("kind", choices=["exact", "domain"], help="Entry type.")
-    add_p.add_argument("value", help="Email address or domain name.")
+    add_p.add_argument("kind", choices=["exact", "domain", "wildcard"], help="Entry type.")
+    add_p.add_argument(
+        "value",
+        nargs="?",
+        default=None,
+        help="Email address or domain name (not required for 'wildcard').",
+    )
 
     remove_p = sub.add_parser("remove", help="Remove an entry from the allowlist.")
-    remove_p.add_argument("kind", choices=["exact", "domain"], help="Entry type.")
-    remove_p.add_argument("value", help="Email address or domain name.")
+    remove_p.add_argument("kind", choices=["exact", "domain", "wildcard"], help="Entry type.")
+    remove_p.add_argument(
+        "value",
+        nargs="?",
+        default=None,
+        help="Email address or domain name (not required for 'wildcard').",
+    )
 
     return parser
 

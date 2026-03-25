@@ -41,10 +41,12 @@
  *   DELETE /api/allowlist/exact/<addr> – remove exact-address entry
  *   PUT    /api/allowlist/domain/<dom> – add domain entry
  *   DELETE /api/allowlist/domain/<dom> – remove domain entry
+ *   PUT    /api/allowlist/wildcard     – add global wildcard (accept all senders)
+ *   DELETE /api/allowlist/wildcard     – remove global wildcard
  */
 
 import { deriveOriginalSender } from "./sender.js";
-import { isAllowed, addExact, removeExact, addDomain, removeDomain, listEntries, requireAuth } from "./allowlist.js";
+import { isAllowed, addExact, removeExact, addDomain, removeDomain, addWildcard, removeWildcard, listEntries, requireAuth } from "./allowlist.js";
 import { MailboxDO } from "./mailbox.js";
 import type { AcceptedEmail, Env } from "./types.js";
 
@@ -145,6 +147,17 @@ export default {
       }
       if (method === "DELETE") {
         await removeDomain(domain, env.ALLOWLIST_KV);
+        return new Response("ok");
+      }
+    }
+
+    if (pathname === "/api/allowlist/wildcard") {
+      if (method === "PUT") {
+        await addWildcard(env.ALLOWLIST_KV);
+        return new Response("ok");
+      }
+      if (method === "DELETE") {
+        await removeWildcard(env.ALLOWLIST_KV);
         return new Response("ok");
       }
     }
