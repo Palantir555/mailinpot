@@ -27,7 +27,7 @@ compatibility_flags = ["nodejs_compat"]
 # These are visible in the Cloudflare dashboard.  Use `wrangler secret put`
 # for anything sensitive (the value here is only the dev default).
 [vars]
-API_SECRET = "change-me-in-production"
+#API_SECRET = "change-me-in-production"
 
 # ── Workers KV – sender allowlist ─────────────────────────────────────────────
 # ALLOWLIST_KV stores who is allowed to send mail to the system.
@@ -37,8 +37,8 @@ API_SECRET = "change-me-in-production"
 # Managed via the Python CLI (`mailinpot-allowlist`) or the REST API.
 [[kv_namespaces]]
 binding = "ALLOWLIST_KV"
-id = "REPLACE_WITH_KV_ID"
-preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+id = "55b901e7d1a4413ab66b6fc923bce594"
+preview_id = "9918b5df7acb4b53ad165fbf15733b09"
 
 # ── Durable Objects – per-recipient mailboxes ─────────────────────────────────
 # One MailboxDO instance is created per unique recipient address.
@@ -52,4 +52,4 @@ class_name = "MailboxDO"
 # or an existing one is renamed/deleted.
 [[migrations]]
 tag = "v1"
-new_classes = ["MailboxDO"]
+new_sqlite_classes = ["MailboxDO"]
