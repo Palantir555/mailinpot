@@ -116,3 +116,15 @@ class MailflowClient:
                 f"{self._base}/api/allowlist/domain/{domain}",
             )
         resp.raise_for_status()
+
+    def add_wildcard(self) -> None:
+        """Add the global wildcard entry to the allowlist (accepts all senders)."""
+        with httpx.Client(headers=self._headers, timeout=self._timeout) as client:
+            resp = client.put(f"{self._base}/api/allowlist/wildcard")
+        resp.raise_for_status()
+
+    def remove_wildcard(self) -> None:
+        """Remove the global wildcard entry from the allowlist."""
+        with httpx.Client(headers=self._headers, timeout=self._timeout) as client:
+            resp = client.delete(f"{self._base}/api/allowlist/wildcard")
+        resp.raise_for_status()
