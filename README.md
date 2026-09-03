@@ -14,6 +14,30 @@ The design prioritizes:
 
 ---
 
+> **`use-og-society-api` branch:** `mailflow` (the Python client - this
+> document's "Python-side API" section) now talks to a member's
+> [og-society](https://github.com/Palantir555/og-society) vault instead of
+> this repo's own Cloudflare Worker. Nothing below this notice changed - the
+> Worker, KV allowlist, Durable Objects and `mailinpot-allowlist` CLI are
+> all still here and still work exactly as documented, just no longer
+> mailflow's transport. See "Quick start" for the new usage and
+> "Deployment" step 3 onward for setup; everything about the Worker itself
+> (steps 1-2) is unaffected.
+>
+> Why: an og-society deployment can only receive mail at all via a Worker
+> (Cloudflare Email Routing has no other push mechanism) or IMAP polling of
+> a real mailbox - neither of which og-society's own architecture wanted to
+> reuse *this* Worker for. Its allowlist model is inverted from what
+> og-society needs (accept mail from any sender to a minted address, not
+> just pre-approved ones), it does not parse MIME beyond a raw byte
+> passthrough, and its Durable-Object queue is single-consumption with a
+> 10-minute TTL - built for "wait once during a test run," not "keep a
+> persistent, browsable inbox." og-society runs its own small,
+> differently-shaped Worker instead (`deploy/mail-worker` in that repo);
+> this repo's Worker is untouched.
+
+---
+
 ## Final architecture
 
 ### Overview
@@ -298,14 +322,31 @@ uv pip install -e mailflow/
 
 ### 4. Set environment variables
 
+**On `use-og-society-api`** (see the notice near the top of this file),
+skip steps 1-2 above entirely unless you specifically want this repo's own
+Worker for something else - `mailflow` now talks to og-society directly:
+
+```bash
+export OGS_BASE_URL=https://og-society.com
+export OGS_API_TOKEN=<a personal token minted at /den/tokens on that account>
+```
+
+Otherwise (using this repo's own Worker, pre-rewrite behaviour):
+
 ```bash
 export MAILINPOT_URL=https://mailinpot.<account>.workers.dev
 export MAILINPOT_SECRET=<the secret you chose in step 1c>
 ```
 
-Add these to your shell profile or `.env` file for convenience.
+Add whichever pair to your shell profile or `.env` file for convenience.
 
 ### 5. Populate the sender allowlist
+
+**On `use-og-society-api`: skip this step.** og-society has no allowlist -
+it accepts mail from any sender to a minted address, by design (a game or
+service's validation-code sender is never known in advance). This step,
+and the `mailinpot-allowlist` CLI generally, only apply if you are using
+this repo's own Worker directly.
 
 Emails are silently dropped unless the original sender is on the allowlist.
 Add entries before running tests:
@@ -328,48 +369,58 @@ mailinpot-allowlist remove domain myservice.com
 
 ## Quick start
 
-### Wait for a specific address
+*(`use-og-society-api` branch - see the notice near the top of this file.
+`OGS_BASE_URL`/`OGS_API_TOKEN` replace `MAILINPOT_URL`/`MAILINPOT_SECRET`;
+get a token from `/den/tokens` on the og-society account this should mint
+addresses under. That account needs enough daily quota for however many
+addresses a run mints - root clearance is unlimited and the realistic
+choice for a dedicated automation account; provisional (1/day) will starve
+a CI run immediately.)*
 
 ```bash
-python -m mailflow run-test123@mailinpot.com
+export OGS_BASE_URL=https://og-society.com
+export OGS_API_TOKEN=ogs_...
 ```
 
-Blocks until an email arrives (60 s default timeout), then prints all
-metadata and the raw message body to stdout.
-
-### Auto-generate a fresh address
+### Mint an address and wait for mail
 
 ```bash
-python -m mailflow
+python -m mailflow --game "password reset test"
 ```
 
-A unique address (e.g. `run-4a7f1c9b2e30@mailinpot.com`) is printed to
-stdout first so you can copy it to the app under test.  Use `--prefix` to
-give it a meaningful label:
+Mints a fresh address on `mailinpot.com` (the default domain - pass
+`--domain` for another one your og-society deployment has configured),
+prints it to stdout, then blocks until an email arrives (60 s default
+timeout) and prints all metadata plus the body.
+
+### A deterministic address, reused across runs
 
 ```bash
-python -m mailflow --prefix password-reset --timeout 120
+python -m mailflow --game "password reset test" --local-part password-reset-smoke
 ```
+
+Minting is idempotent when `--local-part` is explicit: a second run with
+the same value reuses the address og-society already has on file instead of
+minting (and accumulating) a fresh one every time.
 
 ### Use `mailflow` from Python test code
 
 ```python
-from mailflow.addressing import generate_recipient
 from mailflow.client import MailflowClient
 from mailflow.wait import wait_for_email
 
 client = MailflowClient(
-    base_url="https://mailinpot.<account>.workers.dev",
-    api_secret="<secret>",
+    base_url="https://og-society.com",
+    api_token="ogs_...",
 )
 
-# Pick a unique address for this test run
-recipient = generate_recipient(prefix="password-reset")
+# Mint an address for this test run (or reuse one - see above)
+minted = client.mint_address(game="password reset test", domain="mailinpot.com")
 
-# … trigger the email in your app under test …
+# … trigger the email in your app under test, addressed to minted.address …
 
 # Wait for it (raises EmailTimeoutError if nothing arrives within 60 s)
-email = wait_for_email(client, recipient, timeout=60)
+email = wait_for_email(client, minted, timeout=60)
 
 # Hand off to your app-specific parsing code
 assert "Reset your password" in email.subject
