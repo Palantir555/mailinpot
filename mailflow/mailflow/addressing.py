@@ -1,12 +1,13 @@
 """
-mailflow.addressing – recipient address generation helpers.
+mailflow.addressing – local-part generation for minted test-run addresses.
 
-Each test run should use a unique recipient address so that concurrent runs
-do not interfere with each other.  The format is::
-
-    <prefix>-<random-id>@<domain>
-
-where ``domain`` is the catch-all QA mail domain configured in Cloudflare.
+Under the og-society backend, an address has to be *minted* server-side
+(MailflowClient.mint_address) before mail to it goes anywhere - unlike the
+old Worker, which accepted any address at the domain on arrival with no
+prior registration. This module still generates the human-readable local-
+part string, kept deliberately in the same "run-<12 hex chars>" shape as
+before for continuity with any existing test logs/tooling that greps for
+it; mint_address is what actually turns it into a working address.
 """
 
 from __future__ import annotations
@@ -14,26 +15,19 @@ from __future__ import annotations
 import uuid
 
 
-def generate_recipient(
-    domain: str = "mailinpot.com",
-    prefix: str = "run",
-) -> str:
-    """Return a unique recipient address for a single test run.
+def generate_local_part(prefix: str = "run") -> str:
+    """Return a unique local-part for a single test run, e.g. "run-3f2a1b9c4d0e".
 
     Parameters
     ----------
-    domain:
-        The catch-all QA mail domain.  Defaults to ``mailinpot.com``.
     prefix:
         A short label prepended to the random suffix.
 
     Example
     -------
-    >>> addr = generate_recipient(prefix="login-test")
-    >>> addr.startswith("login-test-")
-    True
-    >>> addr.endswith("@mailinpot.com")
+    >>> local = generate_local_part(prefix="login-test")
+    >>> local.startswith("login-test-")
     True
     """
     unique_id = uuid.uuid4().hex[:12]
-    return f"{prefix}-{unique_id}@{domain}"
+    return f"{prefix}-{unique_id}"

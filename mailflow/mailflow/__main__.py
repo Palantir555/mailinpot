@@ -1,30 +1,29 @@
 """
-python -m mailflow [<recipient-address>] [--timeout SECONDS]
+python -m mailflow --game "GAME OR SUITE NAME" [--domain DOMAIN]
+                    [--local-part NAME] [--timeout SECONDS]
 
-Wait for an inbound email addressed to <recipient-address> and print it
-with all metadata to stdout.
-
-If no recipient address is supplied, a fresh unique address is generated
-and printed before the wait begins – handy for ad-hoc testing.
+Mint an address on og-society, wait for an inbound email addressed to it,
+and print it with all metadata to stdout.
 
 Environment variables
 ---------------------
-MAILINPOT_URL      Base URL of the deployed Worker (required).
-MAILINPOT_SECRET   API bearer secret (required).
+OGS_BASE_URL       Root URL of the og-society deployment (required).
+OGS_API_TOKEN       Personal API token from /den/tokens on that account
+                    (required).
 
 Examples
 --------
-    export MAILINPOT_URL=https://mailinpot.example.workers.dev
-    export MAILINPOT_SECRET=my-secret
+    export OGS_BASE_URL=https://og-society.com
+    export OGS_API_TOKEN=ogs_...
 
-    # Wait for mail on a specific address (default 60 s timeout)
-    python -m mailflow run-abc123@mailinpot.com
+    # Mint an address for "my game", wait up to 60s (default)
+    python -m mailflow --game "my game"
 
-    # Auto-generate an address, wait up to 2 minutes
-    python -m mailflow --timeout 120
+    # Deterministic address, reused across runs, custom domain
+    python -m mailflow --game "my game" --local-part smoke-test --domain mailinpot.com
 
-    # Auto-generate an address with a custom prefix
-    python -m mailflow --prefix login-test --timeout 30
+    # Longer wait
+    python -m mailflow --game "my game" --timeout 120
 """
 
 from __future__ import annotations
@@ -33,7 +32,6 @@ import argparse
 import os
 import sys
 
-from mailflow.addressing import generate_recipient
 from mailflow.client import MailflowClient
 from mailflow.models import Email
 from mailflow.wait import EmailTimeoutError, wait_for_email
@@ -41,15 +39,15 @@ from mailflow.wait import EmailTimeoutError, wait_for_email
 
 def _client() -> MailflowClient:
     """Build a MailflowClient from environment variables, or exit with an error."""
-    url = os.environ.get("MAILINPOT_URL", "")
-    secret = os.environ.get("MAILINPOT_SECRET", "")
-    if not url or not secret:
+    url = os.environ.get("OGS_BASE_URL", "")
+    token = os.environ.get("OGS_API_TOKEN", "")
+    if not url or not token:
         print(
-            "Error: MAILINPOT_URL and MAILINPOT_SECRET environment variables must be set.",
+            "Error: OGS_BASE_URL and OGS_API_TOKEN environment variables must be set.",
             file=sys.stderr,
         )
         sys.exit(1)
-    return MailflowClient(base_url=url, api_secret=secret)
+    return MailflowClient(base_url=url, api_token=token)
 
 
 def _print_email(email: Email) -> None:
@@ -58,13 +56,12 @@ def _print_email(email: Email) -> None:
     print(sep)
     print(f"  Received at      {email.received_at}")
     print(f"  Recipient        {email.recipient_address}")
-    print(f"  Original sender  {email.derived_original_sender}")
-    print(f"  Sender basis     {email.sender_match_basis}")
+    print(f"  From             {email.derived_original_sender}")
     print(f"  Subject          {email.subject}")
     if email.message_id:
         print(f"  Message-ID       {email.message_id}")
-    if email.intermediary_sender:
-        print(f"  Intermediary     {email.intermediary_sender}")
+    if email.html_body:
+        print("  Has HTML part    yes")
     print(sep)
     print()
     print(email.body_text)
@@ -74,29 +71,32 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="python -m mailflow",
         description=(
-            "Wait for an inbound email and print it with all metadata. "
-            "Reads MAILINPOT_URL and MAILINPOT_SECRET from the environment."
+            "Mint an address on og-society, wait for an inbound email, and "
+            "print it with all metadata. Reads OGS_BASE_URL and "
+            "OGS_API_TOKEN from the environment."
         ),
     )
     parser.add_argument(
-        "recipient",
-        nargs="?",
+        "--game",
+        required=True,
+        metavar="NAME",
+        help="Label for the minted vault entry (required by og-society).",
+    )
+    parser.add_argument(
+        "--local-part",
+        default=None,
+        metavar="NAME",
         help=(
-            "Recipient address to wait for (e.g. run-abc123@mailinpot.com). "
-            "Omit to auto-generate a fresh address."
+            "Explicit local-part, e.g. 'smoke-test' for smoke-test@DOMAIN. "
+            "Reused across runs (idempotent) rather than minting a fresh "
+            "address each time. Omit to auto-generate a fresh one per run."
         ),
-    )
-    parser.add_argument(
-        "--prefix",
-        default="run",
-        metavar="PREFIX",
-        help="Prefix used when auto-generating an address (default: run).",
     )
     parser.add_argument(
         "--domain",
         default="mailinpot.com",
         metavar="DOMAIN",
-        help="Domain used when auto-generating an address (default: mailinpot.com).",
+        help="Domain to mint the address on (default: mailinpot.com).",
     )
     parser.add_argument(
         "--timeout",
@@ -108,23 +108,18 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    # Resolve recipient – use supplied address or generate a fresh one.
-    if args.recipient:
-        recipient = args.recipient
-    else:
-        recipient = generate_recipient(prefix=args.prefix, domain=args.domain)
-        # Print the generated address to stdout so the caller can copy it.
-        print(recipient)
+    client = _client()
+    minted = client.mint_address(game=args.game, domain=args.domain, local_part=args.local_part)
+    print(minted.address)
 
     print(
-        f"Waiting for mail addressed to {recipient!r} "
+        f"Waiting for mail addressed to {minted.address!r} "
         f"(timeout: {args.timeout:.0f}s) …",
         file=sys.stderr,
     )
 
-    client = _client()
     try:
-        email = wait_for_email(client, recipient, timeout=args.timeout)
+        email = wait_for_email(client, minted, timeout=args.timeout)
     except EmailTimeoutError as exc:
         print(f"Timed out: {exc}", file=sys.stderr)
         sys.exit(1)
